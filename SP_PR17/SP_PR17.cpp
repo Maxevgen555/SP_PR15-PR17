@@ -1,47 +1,54 @@
 #include <windows.h>
 #include <tchar.h>
-
+#include <math.h>
 #pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:WinMainCRTStartup")
 
-// Константы
+// Константы для меню
 #define IDM_SAVE_METAFILE 1001
 #define IDM_VIEW_IMAGE    1002
 
 // Глобальные переменные
-HINSTANCE hInst;
-TCHAR szClassName[] = _T("GraphicOutputApp");
-TCHAR szChildClassName[] = _T("ChildWindow");
+HINSTANCE hInst;  // Дескриптор экземпляра приложения
+TCHAR szClassName[] = _T("GraphicOutputApp");  // Имя класса главного окна
+TCHAR szChildClassName[] = _T("ChildWindow");  // Имя класса дочернего окна
 
 // Прототипы функций
-LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK ChildWndProc(HWND, UINT, WPARAM, LPARAM);
-void DrawContent(HDC hdc, int x, int y);
-void SaveAsMetafile(HWND hWnd);
-void DisplayImage(HWND hWnd);
+LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);  // Процедура главного окна
+LRESULT CALLBACK ChildWndProc(HWND, UINT, WPARAM, LPARAM);  // Процедура дочернего окна
+void DrawContent(HDC hdc, int x, int y);  // Функция рисования содержимого
+void SaveAsMetafile(HWND hWnd);  // Функция сохранения как метафайла
+void DisplayImage(HWND hWnd);  // Функция отображения изображения
 
-// Точка входа
+// Точка входа в приложение
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    hInst = hInstance;
+    hInst = hInstance;  // Сохраняем дескриптор экземпляра
 
+    // Заполняем структуру класса окна
     WNDCLASSEX wc = { 0 };
-    wc.cbSize = sizeof(WNDCLASSEX);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = WndProc;
-    wc.hInstance = hInstance;
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-    wc.lpszClassName = szClassName;
+    wc.cbSize = sizeof(WNDCLASSEX);  // Размер структуры
+    wc.style = CS_HREDRAW | CS_VREDRAW;  // Стиль окна - перерисовка при изменении размера
+    wc.lpfnWndProc = WndProc;  // Указатель на процедуру окна
+    wc.hInstance = hInstance;  // Дескриптор экземпляра
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);  // Загружаем курсор
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);  // Фон окна
+    wc.lpszClassName = szClassName;  // Имя класса
 
+    // Регистрируем класс окна
     if (!RegisterClassEx(&wc)) return 0;
 
+    // Создаем главное окно
     HWND hWnd = CreateWindow(szClassName, _T("Графический вывод - Вариант 3"),
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-        800, 600, NULL, NULL, hInstance, NULL);
-    if (!hWnd) return 0;
+        WS_OVERLAPPEDWINDOW,  // Стиль окна
+        CW_USEDEFAULT, CW_USEDEFAULT,  // Позиция
+        800, 600,  // Размер
+        NULL, NULL, hInstance, NULL);
+    if (!hWnd) return 0;  // Если не удалось создать окно, выходим
 
+    // Показываем и обновляем окно
     ShowWindow(hWnd, nCmdShow);
     UpdateWindow(hWnd);
 
+    // Цикл обработки сообщений
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
@@ -55,37 +62,40 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE: {
+        // Создаем меню
         HMENU hMenu = CreateMenu();
         HMENU hFileMenu = CreatePopupMenu();
         AppendMenu(hFileMenu, MF_STRING, IDM_SAVE_METAFILE, _T("Сохранить как метафайл"));
-        AppendMenu(hFileMenu, MF_STRING, IDM_VIEW_IMAGE, _T("Просмотреть изображение"));
+        AppendMenu(hFileMenu, MF_STRING, IDM_VIEW_IMAGE, _T("Просмотреть метафайл"));
         AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, _T("Файл"));
         SetMenu(hWnd, hMenu);
         break;
     }
     case WM_COMMAND: {
+        // Обрабатываем команды меню
         switch (LOWORD(wParam)) {
         case IDM_SAVE_METAFILE:
-            SaveAsMetafile(hWnd);
+            SaveAsMetafile(hWnd);  // Сохраняем как метафайл
             break;
         case IDM_VIEW_IMAGE:
-            DisplayImage(hWnd);
+            DisplayImage(hWnd);  // Показываем метафайл
             break;
         }
         break;
     }
     case WM_PAINT: {
+        // Обрабатываем сообщение о необходимости перерисовки
         PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
+        HDC hdc = BeginPaint(hWnd, &ps);  // Получаем контекст устройства
 
         // Рисуем содержимое
         DrawContent(hdc, 50, 50);
 
-        EndPaint(hWnd, &ps);
+        EndPaint(hWnd, &ps);  // Завершаем перерисовку
         break;
     }
     case WM_DESTROY:
-        PostQuitMessage(0);
+        PostQuitMessage(0);  // Завершаем приложение
         break;
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
@@ -99,64 +109,81 @@ void DrawContent(HDC hdc, int x, int y) {
     HFONT hFont = CreateFont(28, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, VARIABLE_PITCH, _T("Times New Roman"));
-    HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+    HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);  // Сохраняем старый шрифт
 
     // Устанавливаем цвет текста (зеленый)
     SetTextColor(hdc, RGB(0, 255, 0));
 
     // Выводим текст (замените на ваши ФИО)
-    TextOut(hdc, x, y, _T("Иванов Иван Иванович"), 19);
+    TextOut(hdc, x, y, _T("Гончаров Максим Евгеньевич"), 29);
 
-    // Рисуем фигуру 2
-    int A = 60;
-    int R = A / 2; // 30
-    int B = 60;
+    // Параметры фигуры
+    int A = 60;  // Сторона квадрата
+    int R = A / 2;  // Радиус полукруга (30)
+
+    // Смещаем точку рисования фигуры ниже текста
+    int figureY = y + 60;
 
     // Создаем перо для контура (синий, толщина 2)
     HPEN hPen = CreatePen(PS_SOLID, 2, RGB(0, 0, 255));
-    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);  // Сохраняем старое перо
 
-    // Создаем кисть для заливки (зеленая)
-    HBRUSH hBrush = CreateSolidBrush(RGB(0, 255, 0));
-    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, hBrush);
+    // Рисуем квадрат с диагональной штриховкой (сетка 45 и 135 градусов)
+    HBRUSH hSquareBrush = CreateHatchBrush(HS_DIAGCROSS, RGB(0, 255, 0));
+    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, hSquareBrush);  // Сохраняем старую кисть
 
-    // Рисуем две окружности и соединяющую линию
-    int x1 = x;
-    int y1 = y + 50;
+    // Рисуем квадрат
+    Rectangle(hdc, x, figureY, x + A, figureY + A);
 
-    // Левая окружность
-    Ellipse(hdc, x1, y1, x1 + 2 * R, y1 + 2 * R);
+    // Рисуем полукруг с горизонтальной штриховкой
+    HBRUSH hSemiCircleBrush = CreateHatchBrush(HS_HORIZONTAL, RGB(0, 255, 0));
+    SelectObject(hdc, hSemiCircleBrush);  // Выбираем кисть для полукруга
 
-    // Правая окружность
-    int x2 = x1 + A + 2 * R;
-    Ellipse(hdc, x2, y1, x2 + 2 * R, y1 + 2 * R);
+    // Создаем регион для полукруга (верхняя половина эллипса)
+    HRGN hSemiCircleRgn = CreateEllipticRgn(x, figureY - R, x + 2 * R, figureY + R);
 
-    // Соединяющая линия
-    MoveToEx(hdc, x1 + R, y1 + R, NULL);
-    LineTo(hdc, x2 + R, y1 + R);
+    // Создаем прямоугольный регион для обрезки верхней части эллипса
+    HRGN hRectRgn = CreateRectRgn(x, figureY - R, x + 2 * R, figureY);
 
-    // Восстанавливаем контекст
+    // Обрезаем эллипс, оставляя только верхнюю половину (полукруг)
+    CombineRgn(hSemiCircleRgn, hSemiCircleRgn, hRectRgn, RGN_AND);
+
+    // Закрашиваем регион полукруга горизонтальной штриховкой
+    FillRgn(hdc, hSemiCircleRgn, hSemiCircleBrush);
+
+    // Рисуем контур полукруга (дугу)
+    Arc(hdc, x, figureY - R, x + 2 * R, figureY + R,
+        x + 2 * R, figureY, x, figureY);
+
+    // Восстанавливаем оригинальные объекты GDI
     SelectObject(hdc, hOldFont);
     SelectObject(hdc, hOldPen);
     SelectObject(hdc, hOldBrush);
 
-    // Удаляем GDI объекты
+    // Удаляем созданные объекты GDI
     DeleteObject(hFont);
     DeleteObject(hPen);
-    DeleteObject(hBrush);
+    DeleteObject(hSquareBrush);
+    DeleteObject(hSemiCircleBrush);
+    DeleteObject(hSemiCircleRgn);
+    DeleteObject(hRectRgn);
 }
 
 // Функция сохранения как метафайла
 void SaveAsMetafile(HWND hWnd) {
+    // Создаем контекст метафайла
     HDC hMetaDC = CreateEnhMetaFile(NULL, _T("output.emf"), NULL, _T("Graphic Output"));
 
     if (hMetaDC) {
+        // Рисуем содержимое в метафайл
         DrawContent(hMetaDC, 50, 50);
+
+        // Завершаем создание метафайла
         HENHMETAFILE hemf = CloseEnhMetaFile(hMetaDC);
 
         if (hemf) {
             MessageBox(hWnd, _T("Метафайл успешно сохранен как output.emf"), _T("Успех"), MB_OK);
-            DeleteEnhMetaFile(hemf);
+            DeleteEnhMetaFile(hemf);  // Удаляем метафайл из памяти
         }
         else {
             MessageBox(hWnd, _T("Ошибка при сохранении метафайла"), _T("Ошибка"), MB_OK | MB_ICONERROR);
@@ -164,7 +191,7 @@ void SaveAsMetafile(HWND hWnd) {
     }
 }
 
-// Функция отображения изображения
+// Функция отображения метафайла
 void DisplayImage(HWND hWnd) {
     // Регистрируем класс дочернего окна
     WNDCLASSEX wc = { 0 };
@@ -179,8 +206,8 @@ void DisplayImage(HWND hWnd) {
     RegisterClassEx(&wc);
 
     // Создаем дочернее окно
-    HWND hChild = CreateWindow(szChildClassName, _T("Изображение"),
-        WS_OVERLAPPEDWINDOW | WS_CHILD,
+    HWND hChild = CreateWindow(szChildClassName, _T("Метафайл"),
+        WS_OVERLAPPEDWINDOW | WS_CHILD,  // Стиль окна - дочернее
         CW_USEDEFAULT, CW_USEDEFAULT,
         400, 300, hWnd, NULL, hInst, NULL);
     if (hChild) {
@@ -189,43 +216,40 @@ void DisplayImage(HWND hWnd) {
     }
 }
 
-// Процедура дочернего окна для отображения изображения
+// Процедура дочернего окна для отображения метафайла
 LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_PAINT: {
         PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
+        HDC hdc = BeginPaint(hWnd, &ps);  // Получаем контекст устройства
 
-        // Загружаем изображение (замените на путь к вашему изображению)
-        HBITMAP hBmp = (HBITMAP)LoadImage(NULL, _T("image.bmp"),
-            IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
-        if (hBmp) {
-            HDC hMemDC = CreateCompatibleDC(hdc);
-            SelectObject(hMemDC, hBmp);
+        // Загружаем метафайл
+        HENHMETAFILE hemf = GetEnhMetaFile(_T("output.emf"));
 
-            BITMAP bmp;
-            GetObject(hBmp, sizeof(BITMAP), &bmp);
+        if (hemf) {
+            // Получаем размеры клиентской области
+            RECT rect;
+            GetClientRect(hWnd, &rect);
 
-            // Выводим изображение
-            BitBlt(hdc, 0, 0, bmp.bmWidth, bmp.bmHeight,
-                hMemDC, 0, 0, SRCCOPY);
+            // Воспроизводим метафайл
+            PlayEnhMetaFile(hdc, hemf, &rect);
 
-            DeleteDC(hMemDC);
-            DeleteObject(hBmp);
+            // Удаляем метафайл
+            DeleteEnhMetaFile(hemf);
         }
         else {
-            // Если изображение не загружено, выводим сообщение
-            TextOut(hdc, 10, 10, _T("Изображение не найдено"), 20);
+            // Если метафайл не загружен, выводим сообщение
+            TextOut(hdc, 10, 10, _T("Метафайл output.emf не найден"), 26);
         }
 
-        EndPaint(hWnd, &ps);
+        EndPaint(hWnd, &ps);  // Завершаем перерисовку
         break;
     }
     case WM_CLOSE:
-        DestroyWindow(hWnd);
+        DestroyWindow(hWnd);  // Закрываем окно
         break;
     case WM_DESTROY:
-        PostQuitMessage(0);
+        PostQuitMessage(0);  // Завершаем поток
         break;
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
