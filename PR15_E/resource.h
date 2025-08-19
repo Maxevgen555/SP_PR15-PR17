@@ -1,0 +1,13 @@
+﻿#define IDD_ABOUTBOX      101
+#define IDC_TIME_STATIC   1001
+#define IDI_ICON1         1
+#define IDR_MENU1         102
+#define IDM_FILE_EXIT     40001
+#define IDM_VIEW_TEXT     40002
+#define IDM_VIEW_CTL      40003
+#define IDM_HELP_ABOUT    40004
+#define IDD_CTL_DIALOG    102
+#define IDC_EDIT1         1002
+#define IDC_LIST1         1003
+#define IDC_READ_BTN      1004
+#define IDC_ADD_BTN       1005

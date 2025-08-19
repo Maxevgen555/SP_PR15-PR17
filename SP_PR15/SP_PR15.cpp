@@ -1,169 +1,450 @@
-п»ї// SP_PR15.cpp : РћРїСЂРµРґРµР»СЏРµС‚ С‚РѕС‡РєСѓ РІС…РѕРґР° РґР»СЏ РїСЂРёР»РѕР¶РµРЅРёСЏ.
-//
+#include <windows.h>          // Основные WinAPI функции и типы
+#include <windowsx.h>         // Макросы-обработчики сообщений (например, HANDLE_MSG)
+#include <tchar.h>            // Поддержка TCHAR для Unicode/ANSI
+#include <winuser.h>          // Пользовательские функции WinAPI (доп. к windows.h)
+#include <commdlg.h>          // Общие диалоговые окна (например, открытия файла)
+#include <string>             // STL string (std::wstring)
+#include <vector>             // STL vector
+#include "resource.h"         // Идентификаторы ресурсов из вашего проекта
 
-#include "framework.h"
-#include "SP_PR15.h"
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:wWinMainCRTStartup")
+// Указывает линкеру использовать оконный подсистему, точку входа wWinMainCRTStartup
+// Это позволяет использовать Unicode версию WinMain (_tWinMain)
 
-#define MAX_LOADSTRING 100
 
-// Р“Р»РѕР±Р°Р»СЊРЅС‹Рµ РїРµСЂРµРјРµРЅРЅС‹Рµ:
-HINSTANCE hInst;                                // С‚РµРєСѓС‰РёР№ СЌРєР·РµРјРїР»СЏСЂ
-WCHAR szTitle[MAX_LOADSTRING];                  // РўРµРєСЃС‚ СЃС‚СЂРѕРєРё Р·Р°РіРѕР»РѕРІРєР°
-WCHAR szWindowClass[MAX_LOADSTRING];            // РёРјСЏ РєР»Р°СЃСЃР° РіР»Р°РІРЅРѕРіРѕ РѕРєРЅР°
+// Прототипы функций обработки оконных сообщений и команд
+LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+BOOL OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct);
+void OnCommand(HWND hWnd, int id, HWND hWndCtl, UINT codeNotify);
+void OnDestroy(HWND hWnd);
+void OnPaint(HWND hWnd);
+void OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT keyFlags);
+void OnRButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT keyFlags);
+void OnMenuSelect(HWND hWnd, HMENU hMenu, int item, UINT flags);
 
-// РћС‚РїСЂР°РІРёС‚СЊ РѕР±СЉСЏРІР»РµРЅРёСЏ С„СѓРЅРєС†РёР№, РІРєР»СЋС‡РµРЅРЅС‹С… РІ СЌС‚РѕС‚ РјРѕРґСѓР»СЊ РєРѕРґР°:
-ATOM                MyRegisterClass(HINSTANCE hInstance);
-BOOL                InitInstance(HINSTANCE, int);
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+// Прототипы процедур обработки диалогов
+INT_PTR CALLBACK AboutProc(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK TextViewerProc(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK ControlsProc(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK ModelessProc(HWND, UINT, WPARAM, LPARAM);
 
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPWSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
+
+// Глобальные переменные
+LPCTSTR g_lpszApplicationTitle = TEXT("SP_PR15 - Диалоговые окна");
+LPCTSTR g_lpszClassName = TEXT("sp_pr15_class");
+HINSTANCE g_hInst;
+
+static HMENU g_hEditMenu = NULL;    // Меню "Правка"
+static HMENU g_hFileMenu = NULL;    // Меню "Файл"
+
+// Для немодального диалога
+HWND g_hModelessDlg = NULL;
+
+// Глобальный список строк (для хранения элементов списка)
+std::vector<std::wstring> g_itemsList;
+
+// Буфер для текста (стандартный, 10000 символов)
+TCHAR g_szBuffer[10000] = L"Тест Шага 2";
+
+
+// Точка входа программы (Unicode версия)
+int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+    LPTSTR lpszCmdLine, int nCmdShow)
 {
-    UNREFERENCED_PARAMETER(hPrevInstance);
-    UNREFERENCED_PARAMETER(lpCmdLine);
+    g_hInst = hInstance;  // Сохраняем дескриптор экземпляра приложения
 
-    // TODO: Р Р°Р·РјРµСЃС‚РёС‚Рµ РєРѕРґ Р·РґРµСЃСЊ.
+    WNDCLASSEX wc = { 0 };
+    MSG msg;
+    HWND hWnd;
 
-    // РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РіР»РѕР±Р°Р»СЊРЅС‹С… СЃС‚СЂРѕРє
-    LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
-    LoadStringW(hInstance, IDC_SPPR15, szWindowClass, MAX_LOADSTRING);
-    MyRegisterClass(hInstance);
+    memset(&wc, 0, sizeof(WNDCLASSEX));
+    wc.cbSize = sizeof(WNDCLASSEX);
+    wc.lpszClassName = g_lpszClassName;      // Имя класса окна
+    wc.lpfnWndProc = WndProc;                 // Функция-обработчик окна
+    wc.style = CS_VREDRAW | CS_HREDRAW;      // Перерисовывать при изменении размера (гор и вет)
+    wc.hInstance = hInstance;                 // Экземпляр приложения
+    wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));    // Иконка окна
+    wc.hIconSm = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1),
+        IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);                      // Маленькая иконка
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);                     // Стандартный курсор
+    wc.hbrBackground = CreateSolidBrush(RGB(240, 240, 240));      // Фон окна (светло-серый)
+    wc.lpszMenuName = NULL;                 // Меню устанавливаем позже через CreateWindowEx
+    wc.cbClsExtra = 0;
+    wc.cbWndExtra = 0;
 
-    // Р’С‹РїРѕР»РЅРёС‚СЊ РёРЅРёС†РёР°Р»РёР·Р°С†РёСЋ РїСЂРёР»РѕР¶РµРЅРёСЏ:
-    if (!InitInstance (hInstance, nCmdShow))
+    // Регистрируем класс окна ОС
+    if (!RegisterClassEx(&wc))
     {
+        MessageBox(NULL, TEXT("Ошибка регистрации класса окна!"),
+            TEXT("Ошибка"), MB_OK | MB_ICONERROR);
         return FALSE;
     }
 
-    HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SPPR15));
+    // Загружаем главное меню из ресурсов
+    HMENU hMenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_MAIN_MENU));
 
-    MSG msg;
+    // Создаем основное окно
+    hWnd = CreateWindowEx(
+        NULL,
+        g_lpszClassName,
+        g_lpszApplicationTitle,
+        WS_OVERLAPPEDWINDOW,
+        0, 0, CW_USEDEFAULT, CW_USEDEFAULT,
+        NULL,
+        hMenu,
+        hInstance,
+        NULL
+    );
 
-    // Р¦РёРєР» РѕСЃРЅРѕРІРЅРѕРіРѕ СЃРѕРѕР±С‰РµРЅРёСЏ:
-    while (GetMessage(&msg, nullptr, 0, 0))
+    if (!hWnd)
     {
-        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+        MessageBox(NULL, TEXT("Окно не создано!"),
+            TEXT("Ошибка"), MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
+
+    // Загружаем акселераторы (горячие клавиши) из ресурсов
+    HACCEL hAccel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATOR));
+
+    ShowWindow(hWnd, nCmdShow);     // Показываем окно
+    UpdateWindow(hWnd);             // Обновляем окно, вызывая WM_PAINT
+
+    // Главный цикл обработки сообщений
+    while (GetMessage(&msg, NULL, 0, 0))
+    {
+        // Если есть немодальный диалог и сообщение подходит для диалога,
+        // то отдадим ему первым. Иначе — обработка обычным образом
+        if (g_hModelessDlg == NULL || !IsDialogMessage(g_hModelessDlg, &msg))
         {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+            if (!TranslateAccelerator(hWnd, hAccel, &msg))  // Обработка ускорителей
+            {
+                TranslateMessage(&msg);  // Перевод сообщений клавиатуры
+                DispatchMessage(&msg);   // Отправка сообщения в окно (WndProc)
+            }
         }
     }
 
-    return (int) msg.wParam;
+    return (int)msg.wParam; // Возврат кода завершения
 }
 
-
-
-//
-//  Р¤РЈРќРљР¦РРЇ: MyRegisterClass()
-//
-//  Р¦Р•Р›Р¬: Р РµРіРёСЃС‚СЂРёСЂСѓРµС‚ РєР»Р°СЃСЃ РѕРєРЅР°.
-//
-ATOM MyRegisterClass(HINSTANCE hInstance)
+// Основная оконная функция - обработчик сообщений
+LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    WNDCLASSEXW wcex;
-
-    wcex.cbSize = sizeof(WNDCLASSEX);
-
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SPPR15));
-    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_SPPR15);
-    wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
-
-    return RegisterClassExW(&wcex);
-}
-
-//
-//   Р¤РЈРќРљР¦РРЇ: InitInstance(HINSTANCE, int)
-//
-//   Р¦Р•Р›Р¬: РЎРѕС…СЂР°РЅСЏРµС‚ РјР°СЂРєРµСЂ СЌРєР·РµРјРїР»СЏСЂР° Рё СЃРѕР·РґР°РµС‚ РіР»Р°РІРЅРѕРµ РѕРєРЅРѕ
-//
-//   РљРћРњРњР•РќРўРђР РР:
-//
-//        Р’ СЌС‚РѕР№ С„СѓРЅРєС†РёРё РјР°СЂРєРµСЂ СЌРєР·РµРјРїР»СЏСЂР° СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РІ РіР»РѕР±Р°Р»СЊРЅРѕР№ РїРµСЂРµРјРµРЅРЅРѕР№, Р° С‚Р°РєР¶Рµ
-//        СЃРѕР·РґР°РµС‚СЃСЏ Рё РІС‹РІРѕРґРёС‚СЃСЏ РіР»Р°РІРЅРѕРµ РѕРєРЅРѕ РїСЂРѕРіСЂР°РјРјС‹.
-//
-BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
-{
-   hInst = hInstance; // РЎРѕС…СЂР°РЅРёС‚СЊ РјР°СЂРєРµСЂ СЌРєР·РµРјРїР»СЏСЂР° РІ РіР»РѕР±Р°Р»СЊРЅРѕР№ РїРµСЂРµРјРµРЅРЅРѕР№
-
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
-
-   if (!hWnd)
-   {
-      return FALSE;
-   }
-
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
-
-   return TRUE;
-}
-
-//
-//  Р¤РЈРќРљР¦РРЇ: WndProc(HWND, UINT, WPARAM, LPARAM)
-//
-//  Р¦Р•Р›Р¬: РћР±СЂР°Р±Р°С‚С‹РІР°РµС‚ СЃРѕРѕР±С‰РµРЅРёСЏ РІ РіР»Р°РІРЅРѕРј РѕРєРЅРµ.
-//
-//  WM_COMMAND  - РѕР±СЂР°Р±РѕС‚Р°С‚СЊ РјРµРЅСЋ РїСЂРёР»РѕР¶РµРЅРёСЏ
-//  WM_PAINT    - РћС‚СЂРёСЃРѕРІРєР° РіР»Р°РІРЅРѕРіРѕ РѕРєРЅР°
-//  WM_DESTROY  - РѕС‚РїСЂР°РІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ Рѕ РІС‹С…РѕРґРµ Рё РІРµСЂРЅСѓС‚СЊСЃСЏ
-//
-//
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    switch (message)
+    switch (msg)
     {
-    case WM_COMMAND:
-        {
-            int wmId = LOWORD(wParam);
-            // Р Р°Р·РѕР±СЂР°С‚СЊ РІС‹Р±РѕСЂ РІ РјРµРЅСЋ:
-            switch (wmId)
-            {
-            case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-                break;
-            case IDM_EXIT:
-                DestroyWindow(hWnd);
-                break;
-            case IDM_FILE_EXIT:
-                DestroyWindow(hWnd);
-                break;
-            default:
-                return DefWindowProc(hWnd, message, wParam, lParam);
-            }
-        }
-        break;
-    case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hWnd, &ps);
-            // TODO: Р”РѕР±Р°РІСЊС‚Рµ СЃСЋРґР° Р»СЋР±РѕР№ РєРѕРґ РїСЂРѕСЂРёСЃРѕРІРєРё, РёСЃРїРѕР»СЊР·СѓСЋС‰РёР№ HDC...
-            EndPaint(hWnd, &ps);
-        }
-        break;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        break;
+        HANDLE_MSG(hWnd, WM_CREATE, OnCreate);                 // При создании окна
+        HANDLE_MSG(hWnd, WM_COMMAND, OnCommand);               // При выполнении команды (меню, кнопки)
+        HANDLE_MSG(hWnd, WM_DESTROY, OnDestroy);               // При уничтожении окна
+        HANDLE_MSG(hWnd, WM_PAINT, OnPaint);                   // Перерисовка окна
+        HANDLE_MSG(hWnd, WM_LBUTTONDOWN, OnLButtonDown);       // Левый клик мыши
+        HANDLE_MSG(hWnd, WM_RBUTTONDOWN, OnRButtonDown);       // Правый клик мыши
+
+    case WM_MENUSELECT:
+        // Выделение пункта меню — отдельная обработка
+        OnMenuSelect(hWnd, (HMENU)lParam, LOWORD(wParam), HIWORD(wParam));
+        return 0;
+
     default:
-        return DefWindowProc(hWnd, message, wParam, lParam);
+        return DefWindowProc(hWnd, msg, wParam, lParam);       // Все остальные сообщения - дефолтная обработка
     }
     return 0;
 }
 
-// РћР±СЂР°Р±РѕС‚С‡РёРє СЃРѕРѕР±С‰РµРЅРёР№ РґР»СЏ РѕРєРЅР° "Рћ РїСЂРѕРіСЂР°РјРјРµ".
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+// Обработчик события создания окна
+BOOL OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct)
+{
+    // Создание кнопки "Выход" в окне
+    HWND hBtExit = CreateWindowEx(0, TEXT("Button"), TEXT("Выход"),
+        WS_CHILD | WS_VISIBLE,
+        50, 150, 100, 30,
+        hWnd, (HMENU)(IDCANCEL), g_hInst, NULL);
+    if (!hBtExit) return -1;
+
+    // Получаем главное меню и подменю для дальнейшего управления
+    HMENU hMainMenu = GetMenu(hWnd);
+    g_hFileMenu = GetSubMenu(hMainMenu, 0);  // Первое подменю - Файл
+    g_hEditMenu = GetSubMenu(hMainMenu, 1);  // Второе - Правка
+
+    // Добавляем пункт "Закрыть документ" в меню Файл на позицию 3 (четвертый пункт)
+    InsertMenu(g_hFileMenu, 3, MF_BYPOSITION | MF_STRING, IDM_FILE_CLOSE, TEXT("Закрыть документ"));
+    // Изначально пункт недоступен (серый)
+    EnableMenuItem(g_hFileMenu, IDM_FILE_CLOSE, MF_BYCOMMAND | MF_GRAYED);
+
+    // Изначально все пункты меню "Правка" делаем недоступными (серые)
+    for (int i = 0; i < 4; i++) {
+        EnableMenuItem(g_hEditMenu, i, MF_BYPOSITION | MF_GRAYED);
+    }
+
+    // Инициализируем буфер тестовой строкой
+    wcscpy_s(g_szBuffer, L"Тест2");
+
+    // Заполняем список демонстрационными строками
+    g_itemsList.push_back(L"Пример строки");
+    //g_itemsList.push_back(L"Пример строки 2");
+    //g_itemsList.push_back(L"Пример строки 3");
+
+    return TRUE;
+}
+
+// Обработка команд меню, кнопок и т.п.
+void OnCommand(HWND hWnd, int id, HWND hWndCtl, UINT codeNotify)
+{
+    switch (id)
+    {
+    case IDCANCEL:
+    case IDM_FILE_EXIT:
+        DestroyWindow(hWnd);     // Закрытие главного окна => завершение программы
+        break;
+
+    case IDM_FILE_NEW:
+        MessageBox(hWnd, TEXT("Создан новый документ"), TEXT("Меню Файл"), MB_OK);
+        // Разблокируем пункты меню
+        EnableMenuItem(g_hEditMenu, IDM_EDIT_SELECT, MF_BYCOMMAND | MF_ENABLED);
+        EnableMenuItem(g_hFileMenu, IDM_FILE_CLOSE, MF_BYCOMMAND | MF_ENABLED);
+        break;
+
+    case IDM_FILE_OPEN:
+        MessageBox(hWnd, TEXT("Выбрана команда 'Открыть'"), TEXT("Меню Файл"), MB_OK);
+        break;
+
+    case IDM_EDIT_SELECT:
+        MessageBox(hWnd, TEXT("Текст выделен"), TEXT("Меню Правка"), MB_OK);
+        EnableMenuItem(g_hEditMenu, IDM_EDIT_COPY, MF_BYCOMMAND | MF_ENABLED);
+        break;
+
+    case IDM_EDIT_COPY:
+        MessageBox(hWnd, TEXT("Текст скопирован"), TEXT("Меню Правка"), MB_OK);
+        break;
+
+    case IDM_FILE_CLOSE:
+        MessageBox(hWnd, TEXT("Документ закрыт"), TEXT("Меню Файл"), MB_OK);
+        // Блокируем пункты меню "Правка" и "Закрыть документ"
+        for (int i = 0; i < 4; i++) {
+            EnableMenuItem(g_hEditMenu, i, MF_BYPOSITION | MF_GRAYED);
+        }
+        EnableMenuItem(g_hFileMenu, IDM_FILE_CLOSE, MF_BYCOMMAND | MF_GRAYED);
+        break;
+
+    case IDM_HELP_HELP:
+        MessageBox(hWnd, TEXT("Выбрана команда 'Помощь'"), TEXT("Меню Справка"), MB_OK);
+        break;
+
+    case IDM_HELP_ABOUT:
+        // Показываем модальный диалог "О программе"
+        DialogBox(g_hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, AboutProc);
+        break;
+
+    case IDM_VIEW_TEXT:
+        DialogBox(g_hInst, MAKEINTRESOURCE(IDD_TEXTVIEWER), hWnd, TextViewerProc);
+        break;
+
+    case IDM_VIEW_CTL:
+        DialogBox(g_hInst, MAKEINTRESOURCE(IDD_CONTROLS), hWnd, ControlsProc);
+        InvalidateRect(hWnd, NULL, TRUE); // Перерисовать окно
+        break;
+
+    case IDM_VIEW_MODELESS:
+        if (g_hModelessDlg == NULL)
+        {
+            // Создаем немодальный диалог, если еще не создан
+            g_hModelessDlg = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_MODELESS), hWnd, ModelessProc);
+            if (g_hModelessDlg == NULL)
+            {
+                MessageBox(hWnd, TEXT("Не удалось создать немодальный диалог"), TEXT("Ошибка"), MB_OK);
+            }
+        }
+        else
+        {
+            // Если открыт - показываем и ставим на передний план
+            SetForegroundWindow(g_hModelessDlg);
+        }
+        break;
+    }
+}
+
+// Обработка разрушения главного окна
+void OnDestroy(HWND hWnd)
+{
+    PostQuitMessage(0);   // Выход из цикла сообщений и завершение приложения
+}
+
+// Обработка перерисовки окна
+void OnPaint(HWND hWnd)
+{
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(hWnd, &ps);
+
+    RECT rect;
+    GetClientRect(hWnd, &rect);
+
+    // Выводим список строк из глобального массива с интервалом 20 по вертикали
+    int y = 50;
+    for (const auto& item : g_itemsList)
+    {
+        TextOut(hdc, 20, y, item.c_str(), (int)item.length());
+        y += 20;
+    }
+
+    // Выводим информацию о программе сверху окна
+    LPCTSTR infoText = TEXT("Лабораторная работа 15: Диалоговые окна");
+    TextOut(hdc, 20, 10, infoText, lstrlen(infoText));
+
+    EndPaint(hWnd, &ps);
+}
+
+// Клик левой кнопкой по окну
+void OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
+{
+    HDC hdc = GetDC(hWnd);
+    RECT rect = { x, y, 0, 0 };
+
+    LPCTSTR clickText = TEXT("Щелчок левой кнопкой мыши");
+    DrawText(hdc, clickText, lstrlen(clickText), &rect, DT_LEFT);
+    ReleaseDC(hWnd, hdc);
+}
+
+// Клик правой кнопкой — создание и показ контекстного меню
+void OnRButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
+{
+    HMENU hContextMenu = CreatePopupMenu();
+    AppendMenu(hContextMenu, MF_STRING, IDM_EDIT_SELECT, TEXT("Выделить"));
+    AppendMenu(hContextMenu, MF_STRING, IDM_EDIT_COPY, TEXT("Копировать"));
+    AppendMenu(hContextMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hContextMenu, MF_STRING, IDM_VIEW_TEXT, TEXT("Просмотр текста"));
+    AppendMenu(hContextMenu, MF_STRING, IDM_VIEW_CTL, TEXT("Элементы управления"));
+
+    // Получаем текущее состояние пунктов из главного меню, чтобы синхронизировать доступность
+    UINT selectState = GetMenuState(g_hEditMenu, IDM_EDIT_SELECT, MF_BYCOMMAND);
+    UINT copyState = GetMenuState(g_hEditMenu, IDM_EDIT_COPY, MF_BYCOMMAND);
+
+    // Соответственно устанавливаем разрешение или отключение пунктов в контекстном меню
+    EnableMenuItem(hContextMenu, IDM_EDIT_SELECT,
+        (selectState & MF_GRAYED) ? MF_BYCOMMAND | MF_GRAYED : MF_BYCOMMAND | MF_ENABLED);
+
+    EnableMenuItem(hContextMenu, IDM_EDIT_COPY,
+        (copyState & MF_GRAYED) ? MF_BYCOMMAND | MF_GRAYED : MF_BYCOMMAND | MF_ENABLED);
+
+    POINT pt = { x, y };
+    ClientToScreen(hWnd, &pt);   // Конвертируем координаты клиентской области в экранные
+
+    // Отображаем контекстное меню, привязанное к позиции клика
+    TrackPopupMenu(hContextMenu, TPM_LEFTALIGN | TPM_TOPALIGN, pt.x, pt.y, 0, hWnd, NULL);
+
+    DestroyMenu(hContextMenu);
+}
+
+// Обработка выделения пункта меню — используется для вывода информации/подсказок
+void OnMenuSelect(HWND hWnd, HMENU hMenu, int item, UINT flags)
+{
+    HDC hdc = GetDC(hWnd);
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+
+    // Очищаем область подсказки
+    LPCTSTR clearStr = TEXT("                                        ");
+    TextOut(hdc, 10, rc.bottom - 30, clearStr, lstrlen(clearStr));
+
+    // Если выбран обычный пункт меню (не разделитель и не выпадающее меню)
+    if (item > 0 && !(flags & (MF_SEPARATOR | MF_POPUP)))
+    {
+        TCHAR helpText[256];
+        // Загружаем строку-подсказку из ресурсов по ID пункта меню
+        if (LoadString(g_hInst, item, helpText, 256) > 0)
+        {
+            TextOut(hdc, 10, rc.bottom - 30, helpText, lstrlen(helpText));
+        }
+    }
+    ReleaseDC(hWnd, hdc);
+}
+
+// Обработчик модального диалога "О программе"
+INT_PTR CALLBACK AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG:
+    {
+        // Загружаем и устанавливаем иконку диалога
+        HICON hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_ICON1));
+        SendDlgItemMessage(hDlg, IDC_APP_ICON, STM_SETICON, (WPARAM)hIcon, 0);
+
+        // Отображаем текущее системное время в контроле IDC_CURRENT_TIME
+        SYSTEMTIME st;
+        GetLocalTime(&st);
+        TCHAR timeStr[50];
+        wsprintf(timeStr, TEXT("%02d.%02d.%04d %02d:%02d:%02d"),
+            st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond);
+        SetDlgItemText(hDlg, IDC_CURRENT_TIME, timeStr);
+    }
+    return (INT_PTR)TRUE;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        {
+            EndDialog(hDlg, LOWORD(wParam)); // Закрытие диалога
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
+// Обработчик диалога просмотра текста
+INT_PTR CALLBACK TextViewerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG:
+        SetDlgItemText(hDlg, IDC_EDIT_CONTENT, TEXT("Начало работы")); // Инициализация текста
+        SetFocus(GetDlgItem(hDlg, IDC_LOAD_BUTTON)); // Фокус на кнопку загрузки
+        return (INT_PTR)TRUE;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDC_LOAD_BUTTON)
+        {
+            // Открываем диалог выбора файла
+            OPENFILENAME ofn;
+            TCHAR szFile[260] = { 0 };
+
+            ZeroMemory(&ofn, sizeof(ofn));
+            ofn.lStructSize = sizeof(ofn);
+            ofn.hwndOwner = hDlg;
+            ofn.lpstrFile = szFile;
+            ofn.nMaxFile = sizeof(szFile);
+            ofn.lpstrFilter = TEXT("Текстовые файлы\0*.txt\0Все файлы\0*.*\0");
+            ofn.nFilterIndex = 1;
+            ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+            if (GetOpenFileName(&ofn))
+            {
+                // Открываем выбранный файл для чтения
+                HANDLE hFile = CreateFile(ofn.lpstrFile, GENERIC_READ, 0, NULL,
+                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (hFile != INVALID_HANDLE_VALUE)
+                {
+                    DWORD dwBytesRead;
+                    // Читаем содержимое файла в буфер
+                    ReadFile(hFile, g_szBuffer, sizeof(g_szBuffer) - sizeof(TCHAR), &dwBytesRead, NULL);
+                    g_szBuffer[dwBytesRead / sizeof(TCHAR)] = 0;  // Завершаем строку нулём
+                    SetDlgItemText(hDlg, IDC_EDIT_CONTENT, g_szBuffer); // Выводим содержимое в контрол
+                    CloseHandle(hFile);
+                }
+            }
+        }
+        else if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        {
+            EndDialog(hDlg, LOWORD(wParam));  // Закрытие диалога
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
+// Обработчик диалога с элементами управления
+INT_PTR CALLBACK ControlsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
     UNREFERENCED_PARAMETER(lParam);
     switch (message)
@@ -172,12 +453,70 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         return (INT_PTR)TRUE;
 
     case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        switch (LOWORD(wParam))
         {
-            EndDialog(hDlg, LOWORD(wParam));
+        case IDC_READ_BUTTON:
+        {
+            TCHAR szText[256];
+            // Читаем текст из поля ввода
+            GetDlgItemText(hDlg, IDC_EDIT_TEXT, szText, 256);
+            // Копируем в глобальный буфер
+            wcscpy_s(g_szBuffer, szText);
+        }
+        break;
+        case IDC_ADD_BUTTON:
+        {
+            TCHAR szText[256];
+            // Читаем текст из поля ввода
+            GetDlgItemText(hDlg, IDC_EDIT_TEXT, szText, 256);
+            // Добавляем эту строку в список элементов ListBox
+            SendDlgItemMessage(hDlg, IDC_LIST_ITEMS, LB_ADDSTRING, 0, (LPARAM)szText);
+        }
+        break;
+        case IDOK:
+        {
+            // При нажатии ОК сохраняем все элементы из ListBox в глобальный вектор
+            g_itemsList.clear();
+            int count = SendDlgItemMessage(hDlg, IDC_LIST_ITEMS, LB_GETCOUNT, 0, 0);
+            for (int i = 0; i < count; i++)
+            {
+                TCHAR szItem[256];
+                SendDlgItemMessage(hDlg, IDC_LIST_ITEMS, LB_GETTEXT, i, (LPARAM)szItem);
+                g_itemsList.push_back(szItem);
+            }
+            EndDialog(hDlg, IDOK);
+        }
+        return (INT_PTR)TRUE;
+        case IDCANCEL:
+            EndDialog(hDlg, IDCANCEL);
             return (INT_PTR)TRUE;
         }
         break;
+    }
+    return (INT_PTR)FALSE;
+}
+
+// Обработчик немодального диалога
+INT_PTR CALLBACK ModelessProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_INITDIALOG:
+        return (INT_PTR)TRUE;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDCANCEL)
+        {
+            DestroyWindow(hDlg);        // Уничтожаем окно диалога при закрытии
+            g_hModelessDlg = NULL;      // Очищаем глобальный хендл
+            return (INT_PTR)TRUE;
+        }
+        break;
+
+    case WM_CLOSE:
+        DestroyWindow(hDlg);
+        g_hModelessDlg = NULL;
+        return (INT_PTR)TRUE;
     }
     return (INT_PTR)FALSE;
 }
