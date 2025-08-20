@@ -44,7 +44,7 @@ HWND g_hModelessDlg = NULL;
 std::vector<std::wstring> g_itemsList;
 
 // Буфер для текста (стандартный, 10000 символов)
-TCHAR g_szBuffer[10000] = L"Тест Шага 2";
+TCHAR g_szBuffer[10000] = L"Тест 2";
 
 
 // Точка входа программы (Unicode версия)
